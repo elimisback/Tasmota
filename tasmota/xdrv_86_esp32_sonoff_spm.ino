@@ -251,6 +251,7 @@ typedef struct {
 
   uint32_t timeout;
   power_t old_power;
+  power_t power_on_state;
   uint16_t last_totals;
   uint16_t serial_in_byte_counter;
   uint16_t expected_bytes;
@@ -1096,7 +1097,6 @@ void SSPMHandleReceivedData(void) {
           SSPMSendGetScheme(Sspm->module_selected);
         } else {
           AddLog(LOG_LEVEL_DEBUG, PSTR("SPM: Relay scan done"));
-
           Sspm->mstate = SPM_SCAN_COMPLETE;
         }
         break;
@@ -1704,6 +1704,7 @@ void SSPMInit(void) {
   Sspm->history_relay = 255;                  // Disable display energy history
   Sspm->log_relay = 255;                      // Disable display logging
   Sspm->old_power = TasmotaGlobal.power;
+  Sspm->power_on_state = TasmotaGlobal.power;
   Sspm->mstate = SPM_WAIT;                    // Start init sequence
 }
 
@@ -1792,6 +1793,13 @@ void SSPMEvery100ms(void) {
       break;
     case SPM_SCAN_COMPLETE:
       // Scan sequence finished
+#ifndef SSPM_SIMULATE
+      if (Sspm->power_on_state) {
+        TasmotaGlobal.power = Sspm->power_on_state;
+        Sspm->power_on_state = 0;              // Reset power on state solving re-scan
+        SetPowerOnState();                     // Set power on state now that all relays have been detected
+      }
+#endif
       TasmotaGlobal.discovery_counter = 1;     // Force TasDiscovery()
       Sspm->allow_updates = 1;                 // Enable requests from 100mSec loop
       Sspm->get_energy_relay = 0;
@@ -1865,14 +1873,18 @@ void SSPMEvery100ms(void) {
 bool SSPMSetDevicePower(void) {
   power_t new_power = XdrvMailbox.index;
   if (new_power != Sspm->old_power) {
+    uint32_t relay_count = 0;
     for (uint32_t i = 0; i < TasmotaGlobal.devices_present; i++) {
       uint32_t new_state = (new_power >> i) &1;
       if (new_state != ((Sspm->old_power >> i) &1)) {
         SSPMSendSetRelay(i, new_state);
-        Sspm->no_send_key = 10;  // Disable buttons for 10 * 0.1 second
+        relay_count++;
       }
     }
     Sspm->old_power = new_power;
+    if (relay_count) {
+      Sspm->no_send_key = relay_count *10;  // Disable button response for relay_count * 10 * 0.1 second
+    }
   }
   return true;
 }

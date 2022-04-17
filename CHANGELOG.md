@@ -6,7 +6,29 @@ All notable changes to this project will be documented in this file.
 ## [11.0.0] 20220212
 - Release Olivia
 
-## [11.0.0.7]
+## [11.1.0.1]
+### Added
+- Support for Sonoff MS01 soil moisture sensor (#15335)
+- Support for daisy chaining MAX7219 displays (#15345)
+- Command ``EnergyExportActive<phase>`` to (p)reset energy export active for supported devices. Currently ADE7880 only (#13515)
+- Sonoff SPM delayed SetPowerOnState (#13447)
+
+### Changed
+
+### Fixed
+- SCD40 start low power command (#15361)
+- Improv initial or erase device installation failing to provide Configure WiFi option
+- BL09xx negative power presentation (#15374)
+
+### Removed
+
+
+## [Released]
+
+## [11.1.0] 20220413
+- Release Ostara
+
+## [11.0.0.7] 20220413
 ### Added
 - HX711 command ``Sensor34 10 0|1|<weight in gram>`` to set HX711 fixed tare (0 = use auto tare, 1 = use calibrated tare, Any other value is user selected tare)
 - Command ``SetOption138 1`` to switch GUI energy multi-column layout from left/center (0) to right (1) align (#15342)
@@ -111,8 +133,6 @@ All notable changes to this project will be documented in this file.
 - BL0939, BL0940 and BL0942 energy monitoring buffer miscompares resulting in wrong daily energy values regression from v9.5.0.8 (#14829)
 - Orno WE517 power meter phase 2 current reactive (#14841)
 - Wiegand 34-bit rfid reading and presentation (#14834)
-
-## [Released]
 
 ## [11.0.0] 20220212
 - Release Olivia

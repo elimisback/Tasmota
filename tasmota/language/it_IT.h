@@ -28,7 +28,7 @@
  * Use online command StateText to translate ON, OFF, HOLD and TOGGLE.
  * Use online command Prefix to translate cmnd, stat and tele.
  *
- * Updated until v11.0.0.7 - Last update 13.04.2022
+ * Updated until v11.0.0.7 - Last update 19.04.2022
 \*********************************************************************/
 
 #define LANGUAGE_MODULE_NAME         // Enable to display "Module Generic" (ie Spanish), Disable to display "Generic Module" (ie English)
@@ -651,6 +651,12 @@
 #define D_SENSOR_SPI_MISO               "SPI - MISO"
 #define D_SENSOR_SPI_MOSI               "SPI - MOSI"
 #define D_SENSOR_SPI_CLK                "SPI - CLK"
+#define D_SENSOR_SDIO_CMD               "SDIO - CMD"
+#define D_SENSOR_SDIO_CLK               "SDIO - CLK"
+#define D_SENSOR_SDIO_D0                "SDIO - D0"
+#define D_SENSOR_SDIO_D1                "SDIO - D1"
+#define D_SENSOR_SDIO_D2                "SDIO - D2"
+#define D_SENSOR_SDIO_D3                "SDIO - D3"
 #define D_SENSOR_BACKLIGHT              "Retroilluminazione"
 #define D_SENSOR_PMS5003_TX             "PMS5003 - TX"
 #define D_SENSOR_PMS5003_RX             "PMS5003 - RX"
@@ -871,6 +877,7 @@
 #define D_UNIT_HOUR                       "o"
 #define D_UNIT_GALLONS                    "gal"
 #define D_UNIT_GALLONS_PER_MIN            "g/m"
+#define D_UNIT_INCH_MERCURY               "inHg"
 #define D_UNIT_INCREMENTS                 "inc"
 #define D_UNIT_KELVIN                     "K"
 #define D_UNIT_KILOMETER                  "km"

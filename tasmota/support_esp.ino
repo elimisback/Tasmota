@@ -95,6 +95,11 @@ String GetDeviceHardware(void) {
   return F("ESP8266EX");
 }
 
+String GetDeviceHardwareRevision(void) {
+  // No known revisions for ESP8266/85
+  return GetDeviceHardware();
+}
+
 #endif
 
 /*********************************************************************************************\
@@ -290,14 +295,51 @@ extern "C" {
   #include "rom/spi_flash.h"
 #endif
 
+bool EspSingleOtaPartition(void) {
+  return (1 == esp_ota_get_app_partition_count());
+}
+
+bool EspRunningFactoryPartition(void) {
+  const esp_partition_t *cur_part = esp_ota_get_running_partition();
+  return (cur_part->type == 0 && cur_part->subtype == 0);
+}
+
+void EspPrepRestartToSafeBoot(void) {
+//  esp_ota_mark_app_invalid_rollback_and_reboot();  // Doesn't work 20220501
+  const esp_partition_t *otadata_partition = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_OTA, NULL);
+  if (otadata_partition) {
+    esp_partition_erase_range(otadata_partition, 0, SPI_FLASH_SEC_SIZE * 2);
+  }
+}
+
+bool EspPrepSwitchToOtherPartition(void) {
+  bool valid = EspSingleOtaPartition();
+  if (valid) {
+    bool running_factory = EspRunningFactoryPartition();
+    if (!running_factory) {
+      EspPrepRestartToSafeBoot();
+    } else {
+      const esp_partition_t* partition = esp_ota_get_next_update_partition(nullptr);
+      esp_ota_set_boot_partition(partition);
+    }
+  }
+  return valid;
+}
+
 uint32_t EspFlashBaseAddress(void) {
-  const esp_partition_t* partition = esp_ota_get_next_update_partition(nullptr);
-  if (!partition) { return 0; }
-  return partition->address;  // For tasmota 0x00010000 or 0x00200000
+  if (EspSingleOtaPartition()) {       // Only one partition so start at end of sketch
+    const esp_partition_t *running = esp_ota_get_running_partition();
+    if (!running) { return 0; }
+    return running->address + ESP_getSketchSize();
+  } else {                     // Select other partition
+    const esp_partition_t* partition = esp_ota_get_next_update_partition(nullptr);
+    if (!partition) { return 0; }
+    return partition->address;  // For tasmota 0x00010000 or 0x00200000
+  }
 }
 
 uint32_t EspFlashBaseEndAddress(void) {
-  const esp_partition_t* partition = esp_ota_get_next_update_partition(nullptr);
+  const esp_partition_t* partition = (EspSingleOtaPartition()) ? esp_ota_get_running_partition() : esp_ota_get_next_update_partition(nullptr);
   if (!partition) { return 0; }
   return partition->address + partition->size;  // For tasmota 0x00200000 or 0x003F0000
 }
@@ -659,6 +701,7 @@ typedef struct {
         if (rev3)        { return F("ESP32-PICO-V3"); }    // Max 240MHz, Dual core, LGA 7*7, ESP32-PICO-V3-ZERO, ESP32-PICO-V3-ZERO-DevKit
         else {             return F("ESP32-PICO-D4"); }    // Max 240MHz, Dual core, LGA 7*7, 4MB embedded flash, ESP32-PICO-KIT
       case 6:              return F("ESP32-PICO-V3-02");   // Max 240MHz, Dual core, LGA 7*7, 8MB embedded flash, 2MB embedded PSRAM, ESP32-PICO-MINI-02, ESP32-PICO-DevKitM-2
+      case 7:              return F("ESP32-D0WDR2-V3");    // Max 240MHz, Dual core, QFN 5*5, ESP32-WROOM-32E, ESP32_WROVER-E, ESP32-DevKitC
     }
 #endif  // CONFIG_IDF_TARGET_ESP32
     return F("ESP32");
@@ -666,16 +709,23 @@ typedef struct {
   else if (2 == chip_model) {  // ESP32-S2
 #ifdef CONFIG_IDF_TARGET_ESP32S2
 /* esptool:
-    def get_pkg_version(self):
+    def get_flash_version(self):
         num_word = 3
         block1_addr = self.EFUSE_BASE + 0x044
         word3 = self.read_reg(block1_addr + (4 * num_word))
         pkg_version = (word3 >> 21) & 0x0F
         return pkg_version
+
+    def get_psram_version(self):
+        num_word = 3
+        block1_addr = self.EFUSE_BASE + 0x044
+        word3 = self.read_reg(block1_addr + (4 * num_word))
+        pkg_version = (word3 >> 28) & 0x0F
+        return pkg_version
 */
-    uint32_t chip_ver = REG_GET_FIELD(EFUSE_RD_MAC_SPI_SYS_3_REG, EFUSE_PKG_VERSION);
-    uint32_t pkg_version = chip_ver & 0x7;
-//    uint32_t pkg_version = esp_efuse_get_pkg_ver();
+    uint32_t chip_ver = REG_GET_FIELD(EFUSE_RD_MAC_SPI_SYS_3_REG, EFUSE_FLASH_VERSION);
+    uint32_t psram_ver = REG_GET_FIELD(EFUSE_RD_MAC_SPI_SYS_3_REG, EFUSE_PSRAM_VERSION);
+    uint32_t pkg_version = (chip_ver & 0xF) + ((psram_ver & 0xF) * 100);
 
 //    AddLog(LOG_LEVEL_DEBUG_MORE, PSTR("HDW: ESP32 Model %d, Revision %d, Core %d, Package %d"), chip_info.model, chip_revision, chip_info.cores, chip_ver);
 
@@ -684,6 +734,8 @@ typedef struct {
       case 1:              return F("ESP32-S2FH2");        // Max 240MHz, Single core, QFN 7*7, 2MB embedded flash, ESP32-S2-MINI-1, ESP32-S2-DevKitM-1
       case 2:              return F("ESP32-S2FH4");        // Max 240MHz, Single core, QFN 7*7, 4MB embedded flash
       case 3:              return F("ESP32-S2FN4R2");      // Max 240MHz, Single core, QFN 7*7, 4MB embedded flash, 2MB embedded PSRAM, , ESP32-S2-MINI-1U, ESP32-S2-DevKitM-1U
+      case 100:            return F("ESP32-S2R2");
+      case 102:            return F("ESP32-S2FNR2");       // Max 240MHz, Single core, QFN 7*7, 4MB embedded flash, 2MB embedded PSRAM, , Lolin S2 mini
     }
 #endif  // CONFIG_IDF_TARGET_ESP32S2
     return F("ESP32-S2");
@@ -765,6 +817,24 @@ typedef struct {
     return F("ESP32-H2");
   }
   return F("ESP32");
+}
+
+String GetDeviceHardwareRevision(void) {
+  // ESP32-S2
+  // ESP32-D0WDQ6 rev.1
+  // ESP32-C3 rev.2
+  // ESP32-C3 rev.3
+  String result = GetDeviceHardware();   // ESP32-C3
+
+  esp_chip_info_t chip_info;
+  esp_chip_info(&chip_info);
+  char revision[10] = { 0 };
+  if (chip_info.revision) {
+    snprintf_P(revision, sizeof(revision), PSTR(" rev.%d"), chip_info.revision);
+  }
+  result += revision;                    // ESP32-C3 rev.3
+
+  return result;
 }
 
 /*

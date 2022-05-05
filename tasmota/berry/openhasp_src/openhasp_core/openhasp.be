@@ -3,6 +3,8 @@
 # use `import openhasp` and set the JSONL definitions in `pages.jsonl`
 #
 # As an optimization `0 #- lv.PART_MAIN | lv.STATE_DEFAULT -#` is replaced with `0`
+#
+# rm openhasp.tapp; zip -j -0 openhasp.tapp openhasp_core/*
 #################################################################################
 # How to solidify (needs an ESP32 with PSRAM)
 #-
@@ -17,7 +19,8 @@ var classes = [
   "page", "obj", "scr",
   "btn", "switch", "checkbox",
   "label", "spinner", "line", "img", "roller", "btnmatrix",
-  "bar", "slider", "arc", "textarea", "dropdown"
+  "bar", "slider", "arc", "textarea", "dropdown",
+  "qrcode"
 ]
 for c:classes
   solidify.dump(openhasp.OpenHASP.("lvh_"+c), true)
@@ -132,6 +135,11 @@ class lvh_obj
     "text_rule": nil,
     "text_rule_formula": nil,
     "text_rule_format": nil,
+    # qrcode
+    "qr_size": nil,
+    "qr_dark_color": nil,
+    "qr_light_color": nil,
+    "qr_text": nil,
   }
 
   #====================================================================
@@ -262,7 +270,8 @@ class lvh_obj
     # self._lv_obj.add_event_cb(/ obj, event -> self.action_cb(obj, event), lv.EVENT_CLICKED, 0)
   end
   def get_action()
-    return self._action
+    var action = self._action
+    return action ? action : ""     # cannot be `nil` as it would mean no member
   end
 
   #====================================================================
@@ -287,26 +296,19 @@ class lvh_obj
     lv.EVENT_VALUE_CHANGED:       "changed",
   }
   def register_event_cb()
-    # register callback for each event
-    var f = / obj, event -> self.event_cb(obj, event)
+    var oh = self._page._oh
     for ev:self._event_map.keys()
-      self._lv_obj.add_event_cb(f, ev, 0)
+      oh.register_event(self, ev)
     end
-    # # print("register_event_cb")
-    # var mask = lv.EVENT_PRESSED | lv.EVENT_CLICKED | lv.EVENT_PRESS_LOST | lv.EVENT_RELEASED |
-    #            lv.EVENT_LONG_PRESSED | lv.EVENT_LONG_PRESSED_REPEAT | lv.EVENT_VALUE_CHANGED
-    # var target = self
-    # mask = lv.EVENT_CLICKED
-    # self._lv_obj.add_event_cb(/ obj, event -> target.event_cb(obj, event), mask, 0)
   end
 
-  def event_cb(obj, event)
+  def event_cb(event)
     # the callback avoids doing anything sophisticated in the cb
     # defer the actual action to the Tasmota event loop
     # print("-> CB fired","self",self,"obj",obj,"event",event.tomap(),"code",event.code)
     var oh = self._page._oh         # openhasp global object
     var code = event.code           # materialize to a local variable, otherwise the value can change (and don't capture event object)
-    if self.action != nil && code == lv.EVENT_CLICKED
+    if self.action != "" && code == lv.EVENT_CLICKED
       # if clicked and action is declared, do the page change event
       tasmota.set_timer(0, /-> oh.do_action(self, code))
     end
@@ -314,24 +316,12 @@ class lvh_obj
     var event_hasp = self._event_map.find(code)
     if event_hasp != nil
       import string
+
       var val = string.format('{"hasp":{"p%ib%i":"%s"}}', self._page._page_id, self.id, event_hasp)
-      # var pxby = "p" + self._page._page_id + "b" + self.id
-      # var val = '{"hasp":{"p' + str(self._page._page_id) + 'b' + str(self.id) +
-      #           '":"' + event_hasp + '"}}'
-      # var val = json.dump( {'hasp': {pxby: event_hasp}} )
       # print("val=",val)
       tasmota.set_timer(0, /-> tasmota.publish_rule(val))
     end
   end
-  
-  # def action_cb(obj, event)
-  #   # the callback avoids doing anything sophisticated in the cb
-  #   # defer the actual action to the Tasmota event loop
-  #   # print("-> CB fired","self",self,"obj",obj,"event",event.tomap(),"code",event.code)
-  #   var oh = self._page._oh         # openhasp global object
-  #   var code = event.code           # materialize to a local variable, otherwise the value can change (and don't capture event object)
-  #   tasmota.set_timer(0, /-> oh.do_action(self, code))
-  # end
 
   #====================================================================
   #  Mapping of synthetic attributes
@@ -945,6 +935,56 @@ class lvh_spinner : lvh_arc
   def get_speed() end
 end
 
+#====================================================================
+#  img
+#====================================================================
+class lvh_img : lvh_obj
+  static _lv_class = lv.img
+
+  def set_angle(v)
+    v = int(v)
+    self._lv_obj.set_angle(v)
+  end
+  def get_angle()
+    return self._lv_obj.get_angle()
+  end
+end
+
+#====================================================================
+#  qrcode
+#====================================================================
+class lvh_qrcode : lvh_obj
+  static _lv_class = lv.qrcode
+
+  # init
+  # - create the LVGL encapsulated object
+  # arg1: parent object
+  # arg2: json line object
+  def init(parent, page, jline)
+    self._page = page
+
+    var size = jline.find("qr_size", 100)
+    var dark_col = self.parse_color(jline.find("qr_dark_color", "#000000"))
+    var light_col = self.parse_color(jline.find("qr_light_color", "#FFFFFF"))
+
+    self._lv_obj = lv.qrcode(parent, size, dark_col, light_col)
+    self.post_init()
+  end
+
+  # ignore attributes, spinner can't be changed once created
+  def set_qr_size(t) end
+  def get_qr_size() end
+  def set_qr_dark_color(t) end
+  def get_qr_dark_color() end
+  def set_qr_light_color(t) end
+  def get_qr_light_color() end
+  def set_qr_text(t)
+    t = str(t)
+    self._lv_obj.update(t, size(t))
+  end
+  def get_qr_text() end
+end
+
 #################################################################################
 #
 # All other subclasses than just map the LVGL object
@@ -956,7 +996,6 @@ class lvh_btn : lvh_obj         static _lv_class = lv.btn         end
 class lvh_btnmatrix : lvh_obj   static _lv_class = lv.btnmatrix   end
 class lvh_checkbox : lvh_obj    static _lv_class = lv.checkbox    end
 class lvh_dropdown : lvh_obj    static _lv_class = lv.dropdown    end
-class lvh_img : lvh_obj         static _lv_class = lv.img         end
 class lvh_line : lvh_obj        static _lv_class = lv.line        end
 class lvh_roller : lvh_obj      static _lv_class = lv.roller      end
 class lvh_slider : lvh_obj      static _lv_class = lv.slider      end
@@ -1082,6 +1121,13 @@ class lvh_page
       anim = self._oh.page_dir_to(self.id())
     end
 
+    # send page events
+    import string
+    var event_str_in = string.format('{"hasp":{"p%i":"out"}}', self._oh.lvh_page_cur_idx)
+    tasmota.set_timer(0, /-> tasmota.publish_rule(event_str_in))
+    var event_str_out = string.format('{"hasp":{"p%i":"in"}}', self._page_id)
+    tasmota.set_timer(0, /-> tasmota.publish_rule(event_str_out))
+
     # change current page
     self._oh.lvh_page_cur_idx = self._page_id
 
@@ -1108,6 +1154,9 @@ class OpenHASP
   var lvh_page_cur_idx                  # (int) current page index number
   # regex patterns
   var re_page_target                    # compiled regex for action `p<number>`
+  # specific event_cb handling for less memory usage since we are registering a lot of callbacks
+  var event                             # try to keep the event object around and reuse it
+  var event_cb                          # the low-level callback for the closure to be registered
 
   # assign lvh_page to a static attribute
   static lvh_page = lvh_page
@@ -1135,6 +1184,7 @@ class OpenHASP
  	# static lvh_linemeter = lvh_linemeter
  	# static lvh_gauge = lvh_gauge
 	static lvh_textarea = lvh_textarea    # additional?
+  static lvh_qrcode = lvh_qrcode
 
   static def_templ_name = "pages.jsonl" # default template name
 
@@ -1236,19 +1286,26 @@ class OpenHASP
     self.lvh_pages[1] = lvh_page_class(1, self)   # always create page #1
 
     var f = open(templ_name,"r")
-    var jsonl = string.split(f.read(), "\n")
+    var f_content =  f.read()
     f.close()
+    
+    var jsonl = string.split(f_content, "\n")
+    f = nil   # allow deallocation
+    f_content = nil
 
     # parse each line
-    for j:jsonl
-      var jline = json.load(j)
+    while size(jsonl) > 0
+      var jline = json.load(jsonl[0])
 
       if type(jline) == 'instance'
         self.parse_page(jline)    # parse page first to create any page related objects, may change self.lvh_page_cur_idx
         # objects are created in the current page
         self.parse_obj(jline, self.lvh_pages[self.lvh_page_cur_idx])    # then parse object within this page
       end
+      jline = nil
+      jsonl.remove(0)
     end
+    jsonl = nil     # make all of it freeable
 
     # current page is always 1 when we start
     self.lvh_page_cur_idx = 1
@@ -1343,11 +1400,11 @@ class OpenHASP
   #  Arg2: LVGL event fired
   #  Returns: nil
   #====================================================================
-  def do_action(lvh_obj, event_code)
+  def do_action(lvh_object, event_code)
     if event_code != lv.EVENT_CLICKED    return end
-    var action = lvh_obj._action
+    var action = lvh_object._action
     var cur_page = self.lvh_pages[self.lvh_page_cur_idx]
-    # print("do_action","lvh_obj",lvh_obj,"action",action,"cur_page",cur_page,self.lvh_page_cur_idx)
+    # print("do_action","lvh_object",lvh_object,"action",action,"cur_page",cur_page,self.lvh_page_cur_idx)
 
     # action can be `prev`, `next`, `back`, or `p<number>` like `p1`
     var to_page = nil
@@ -1400,6 +1457,42 @@ class OpenHASP
         lvh_page_cur.prev = int(jline.find("prev", nil))
         lvh_page_cur.next = int(jline.find("next", nil))
         lvh_page_cur.back = int(jline.find("back", nil))
+      end
+    end
+  end
+
+  #====================================================================
+  # Event CB handling
+  #====================================================================
+  def register_event(lvh_obj, event_type)
+    import cb
+    import introspect
+
+    # create the callback to the closure only once
+    if self.event_cb == nil
+      self.event_cb = cb.gen_cb(/ event_ptr_i -> self.event_dispatch(event_ptr_i))
+    end
+    # register the C callback
+    var lv_obj = lvh_obj._lv_obj
+    # we pass the cb as a comptr so it's already a C pointer
+    lv_obj.add_event_cb(self.event_cb, event_type, introspect.toptr(lvh_obj))
+  end
+
+  def event_dispatch(event_ptr_i)
+    import introspect
+    var event_ptr = introspect.toptr(event_ptr_i)   # convert to comptr, because it was a pointer in the first place
+
+    if self.event   self.event._change_buffer(event_ptr)
+    else            self.event = lv.lv_event(event_ptr)
+    end
+
+    var user_data = self.event.user_data            # it is supposed to be a pointer to the object
+    if int(user_data) != 0
+      var target_lvh_obj = introspect.fromptr(user_data)
+      if type(target_lvh_obj) == 'instance'
+        # print("CB Fired", self.event.code, target_lvh_obj)
+        target_lvh_obj.event_cb(self.event)
+        # print("CB Fired After")
       end
     end
   end

@@ -209,10 +209,12 @@ const char HTTP_SCRIPT_INFO_END[] PROGMEM =
 
 #ifdef USE_UNISHOX_COMPRESSION
   #include "./html_compressed/HTTP_HEAD_LAST_SCRIPT.h"
+  #include "./html_compressed/HTTP_HEAD_LAST_SCRIPT32.h"
   #include "./html_compressed/HTTP_HEAD_STYLE1.h"
   #include "./html_compressed/HTTP_HEAD_STYLE2.h"
 #else
   #include "./html_uncompressed/HTTP_HEAD_LAST_SCRIPT.h"
+  #include "./html_uncompressed/HTTP_HEAD_LAST_SCRIPT32.h"
   #include "./html_uncompressed/HTTP_HEAD_STYLE1.h"
   #include "./html_uncompressed/HTTP_HEAD_STYLE2.h"
 #endif
@@ -241,8 +243,12 @@ const char HTTP_HEAD_STYLE3[] PROGMEM =
   "<body>"
   "<div style='text-align:left;display:inline-block;color:#%06x;min-width:340px;'>"  // COLOR_TEXT
 #ifdef FIRMWARE_MINIMAL
+#ifdef FIRMWARE_SAFEBOOT
+  "<span style='text-align:center;color:#%06x;'><h3>" D_SAFEBOOT "</h3></span>"  // COLOR_TEXT_WARNING
+#else
   "<div style='text-align:center;color:#%06x;'><h3>" D_MINIMAL_FIRMWARE_PLEASE_UPGRADE "</h3></div>"  // COLOR_TEXT_WARNING
-#endif
+#endif  // FIRMWARE_SAFEBOOT
+#endif  // FIRMWARE_MINIMAL
   "<div style='text-align:center;color:#%06x;'><noscript>" D_NOSCRIPT "<br></noscript>" // COLOR_TITLE
 /*
 #ifdef LANGUAGE_MODULE_NAME
@@ -352,7 +358,17 @@ const char HTTP_FORM_RST_UPG[] PROGMEM =
   "<br><button type='submit' onclick='eb(\"f1\").style.display=\"none\";eb(\"f2\").style.display=\"block\";this.form.submit();'>" D_START " %s</button></form>"
   "</fieldset>"
   "</div>"
-  "<div id='f2' style='display:none;text-align:center;'><b>" D_UPLOAD_STARTED " ...</b></div>";
+  "<div id='f2' style='display:none;text-align:center;'><b>" D_UPLOAD_STARTED "...</b></div>";
+
+// upload via factory partition
+const char HTTP_FORM_RST_UPG_FCT[] PROGMEM =
+  "<form method='post' action='u2' enctype='multipart/form-data'>"
+  "<br><input type='file' name='u2'><br>"
+  "<br><button type='submit' onclick='eb(\"f1\").style.display=\"none\";eb(\"f3\").style.display=\"block\";return upl(this);'>" D_START " %s</button></form>"
+  "</fieldset>"
+  "</div>"
+  "<div id='f3' style='display:none;text-align:center;'><b>" D_UPLOAD_FACTORY "...</b></div>"
+  "<div id='f2' style='display:none;text-align:center;'><b>" D_UPLOAD_STARTED "...</b></div>";
 
 const char HTTP_FORM_CMND[] PROGMEM =
   "<br><textarea readonly id='t1' cols='340' wrap='off'></textarea><br><br>"
@@ -523,6 +539,9 @@ const WebServerDispatch_t WebServerDispatch[] PROGMEM = {
   { "u1", HTTP_ANY, HandleUpgradeFirmwareStart },   // OTA
   { "u2", HTTP_OPTIONS, HandlePreflightRequest },
   { "u3", HTTP_ANY, HandleUploadDone },
+#ifdef ESP32
+  { "u4", HTTP_GET, HandleSwitchFactory },
+#endif // ESP32
   { "mn", HTTP_GET, HandleManagement },
   { "cs", HTTP_GET, HandleConsole },
   { "cs", HTTP_OPTIONS, HandlePreflightRequest },
@@ -841,7 +860,11 @@ void WSContentSendStyle_P(const char* formatP, ...) {
       WSContentSend_P(HTTP_SCRIPT_COUNTER);
     }
   }
+#ifdef ESP32
+  WSContentSend_P(HTTP_HEAD_LAST_SCRIPT32);
+#else
   WSContentSend_P(HTTP_HEAD_LAST_SCRIPT);
+#endif
 
   WSContentSend_P(HTTP_HEAD_STYLE1, WebColor(COL_FORM), WebColor(COL_INPUT), WebColor(COL_INPUT_TEXT), WebColor(COL_INPUT),
                   WebColor(COL_INPUT_TEXT), WebColor(COL_CONSOLE), WebColor(COL_CONSOLE_TEXT), WebColor(COL_BACKGROUND));
@@ -2283,7 +2306,15 @@ void HandleRestoreConfiguration(void)
   WSContentStart_P(PSTR(D_RESTORE_CONFIGURATION));
   WSContentSendStyle();
   WSContentSend_P(HTTP_FORM_RST);
+#ifdef ESP32
+  if (EspSingleOtaPartition() && !EspRunningFactoryPartition()) {
+    WSContentSend_P(HTTP_FORM_RST_UPG_FCT, PSTR(D_RESTORE));
+  } else {
+    WSContentSend_P(HTTP_FORM_RST_UPG, PSTR(D_RESTORE));
+  }
+#else
   WSContentSend_P(HTTP_FORM_RST_UPG, PSTR(D_RESTORE));
+#endif
   if (WifiIsInManagerMode()) {
     WSContentSpaceButton(BUTTON_MAIN);
   } else {
@@ -2420,7 +2451,7 @@ void HandleInformation(void)
 #endif  // USE_DISCOVERY
 
   WSContentSend_P(PSTR("}1}2&nbsp;"));  // Empty line
-  WSContentSend_P(PSTR("}1" D_ESP_CHIP_ID "}2%d (%s)"), ESP_getChipId(), GetDeviceHardware().c_str());
+  WSContentSend_P(PSTR("}1" D_ESP_CHIP_ID "}2%d (%s)"), ESP_getChipId(), GetDeviceHardwareRevision().c_str());
 #ifdef ESP8266
   WSContentSend_P(PSTR("}1" D_FLASH_CHIP_ID "}20x%06X"), ESP.getFlashChipId());
 #endif
@@ -2508,7 +2539,15 @@ void HandleUpgradeFirmware(void) {
   WSContentStart_P(PSTR(D_FIRMWARE_UPGRADE));
   WSContentSendStyle();
   WSContentSend_P(HTTP_FORM_UPG, SettingsText(SET_OTAURL));
+#ifdef ESP32
+  if (EspSingleOtaPartition() && !EspRunningFactoryPartition()) {
+    WSContentSend_P(HTTP_FORM_RST_UPG_FCT, PSTR(D_UPGRADE));
+  } else {
+    WSContentSend_P(HTTP_FORM_RST_UPG, PSTR(D_UPGRADE));
+  }
+#else
   WSContentSend_P(HTTP_FORM_RST_UPG, PSTR(D_UPGRADE));
+#endif
   WSContentSpaceButton(BUTTON_MAIN);
   WSContentStop();
 
@@ -2884,6 +2923,80 @@ void HandlePreflightRequest(void)
 
 /*-------------------------------------------------------------------------------------------*/
 
+#ifdef ESP32
+// Check if we are in single-mode OTA, if so restart to factory mode
+//
+// Parameter `u4` is either `fct` or `ota` to switch to factory or ota
+//
+// The page can return the followinf (code 200)
+// `false`: the current partition is not the target, but a restart to factory is triggered (polling required)
+// `true`: the current partition is the one required
+// `none`: there is no factory partition
+
+// return a simple status page as text/plain code 200
+static void WSReturnSimpleString(const char *msg) {
+  if (nullptr == msg) { msg = ""; }
+  Webserver->client().flush();
+  WSHeaderSend();
+  Webserver->send(200, "text/plain", msg);
+}
+
+void HandleSwitchFactory(void)
+{
+  if (!HttpCheckPriviledgedAccess()) { return; }
+
+  char tmp1[8];
+  WebGetArg(PSTR("u4"), tmp1, sizeof(tmp1));
+
+  bool switch_factory = false;      // trigger a restart to factory partition?
+  bool switch_ota = false;          // switch back to OTA partition
+  bool single_ota = false;
+  bool api_mode = Webserver->hasArg("api");   // api-mode, returns `true`, `false` or `none`
+
+  // switch to factory ?
+  if (EspSingleOtaPartition()) {
+    single_ota = true;
+    if (strcmp("fct", tmp1) == 0 && !EspRunningFactoryPartition()) {
+      switch_factory = true;
+    }
+    // switch to OTA
+    else if (strcmp("ota", tmp1) == 0 && EspRunningFactoryPartition()) {
+      switch_ota = true;
+    }
+  }
+
+  // apply the change in flash and return result
+  if (switch_factory || switch_ota) {
+    SettingsSaveAll();
+    if (switch_factory) {
+      EspPrepRestartToSafeBoot();
+    } else {
+      const esp_partition_t* partition = esp_ota_get_next_update_partition(nullptr);
+      esp_ota_set_boot_partition(partition);
+    }
+
+    if (api_mode) {
+      WSReturnSimpleString("false");
+      AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_HTTP D_RESTART));
+      EspRestart();
+    } else {
+      WebRestart(0);
+    }
+  } else {
+    if (api_mode) {
+      // return `none` or `true`
+      WSReturnSimpleString(EspSingleOtaPartition() ? "true" : "none");
+    } else {
+      Webserver->sendHeader("Location", "/", true);
+      Webserver->send(302, "text/plain", "");
+    }
+  }
+  Web.upload_file_type = UPL_TASMOTA;
+}
+#endif // ESP32
+
+/*-------------------------------------------------------------------------------------------*/
+
 void HandleHttpCommand(void)
 {
   if (!HttpCheckPriviledgedAccess(false)) { return; }
@@ -2901,6 +3014,11 @@ void HandleHttpCommand(void)
       WSContentBegin(401, CT_APP_JSON);
       WSContentSend_P(PSTR("{\"" D_RSLT_WARNING "\":\"" D_NEED_USER_AND_PASSWORD "\"}"));
       WSContentEnd();
+
+      // https://github.com/arendst/Tasmota/discussions/15420
+      ShowWebSource(SRC_WEBCOMMAND);
+      AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_HTTP "Bad userid and/or password"));
+
       return;
     }
   }
@@ -3302,7 +3420,7 @@ const char kWebCmndStatus[] PROGMEM = D_JSON_DONE "|" D_JSON_WRONG_PARAMETERS "|
 
 const char kWebCommands[] PROGMEM = "|"  // No prefix
   D_CMND_WEBLOG "|"
-#ifndef FIRMWARE_MINIMAL
+#ifndef FIRMWARE_MINIMAL_ONLY
   D_CMND_WEBTIME "|"
 #ifdef USE_EMULATION
   D_CMND_EMULATION "|"
@@ -3318,12 +3436,12 @@ const char kWebCommands[] PROGMEM = "|"  // No prefix
 #ifdef USE_CORS
   "|" D_CMND_CORS
 #endif
-#endif  // FIRMWARE_MINIMAL
+#endif  // FIRMWARE_MINIMAL_ONLY
 ;
 
 void (* const WebCommand[])(void) PROGMEM = {
   &CmndWeblog,
-#ifndef FIRMWARE_MINIMAL
+#ifndef FIRMWARE_MINIMAL_ONLY
   &CmndWebTime,
 #ifdef USE_EMULATION
   &CmndEmulation,
@@ -3339,7 +3457,7 @@ void (* const WebCommand[])(void) PROGMEM = {
 #ifdef USE_CORS
   , &CmndCors
 #endif
-#endif  // FIRMWARE_MINIMAL
+#endif  // FIRMWARE_MINIMAL_ONLY
   };
 
 /*********************************************************************************************\

@@ -415,6 +415,7 @@
 //  #define INFLUXDB_ORG       ""                  // [IfxUser, IfxOrg] Influxdb v1 username or v2 organisation
 //  #define INFLUXDB_TOKEN     ""                  // [IfxPassword, IfxToken] Influxdb v1 password or v2 token
 //  #define INFLUXDB_BUCKET    "db"                // [IfxDatabase, IfxBucket] Influxdb v1 database or v2 bucket
+//  #define INFLUXDB_RP        ""                  // [IfxRP] Influxdb retention policy
 
 // -- MQTT ----------------------------------------
 #define MQTT_LWT_OFFLINE       "Offline"         // MQTT LWT offline topic message
@@ -948,6 +949,8 @@
 //#define USE_NEOPOOL                              // Add support for Sugar Valley NeoPool Controller - also known under brands Hidrolife, Aquascenic, Oxilife, Bionet, Hidroniser, UVScenic, Station, Brilix, Bayrol and Hay (+6k flash, +60 mem)
 //  #define NEOPOOL_MODBUS_ADDRESS       1         // Any modbus address
 
+//#define FLOWRATEMETER                            // Add support for water flow meter YF-DN50 and similary (+1k7 code)
+
 // -- Thermostat control ----------------------------
 //#define USE_THERMOSTAT                           // Add support for Thermostat
   #define THERMOSTAT_CONTROLLER_OUTPUTS         1         // Number of outputs to be controlled independently
@@ -997,6 +1000,8 @@
 
 #define SET_ESP32_STACK_SIZE  (8 * 1024)         // Set the stack size for Tasmota. The default value is 8192 for Arduino, some builds might need to increase it
 
+#define USE_ESP32_SENSORS                        // Add support for ESP32 temperature and optional hall effect sensor
+
 //#define USE_SONOFF_SPM                           // Add support for ESP32 based Sonoff Smart Stackable Power Meter (+11k code)
 
 //#define USE_ETHERNET                             // Add support for ethernet (+20k code)
@@ -1014,6 +1019,8 @@
 //  #define ETH_CLKMODE       0                    // [EthClockMode] 0 = ETH_CLOCK_GPIO0_IN, 1 = ETH_CLOCK_GPIO0_OUT, 2 = ETH_CLOCK_GPIO16_OUT, 3 = ETH_CLOCK_GPIO17_OUT
 
 #define USE_ADC                                  // Add support for ADC on GPIO32 to GPIO39
+
+#define USE_NETWORK_LIGHT_SCHEMES                // Add support for light schemes via DDP (via UDP on port 4048)
 
 //#define USE_SPI                                  // Add support for hardware SPI
 //#define USE_MI_ESP32                             // Add support for ESP32 as a BLE-bridge (+9k2 mem, +292k flash)
@@ -1078,6 +1085,8 @@
     #define BE_LV_WIDGET_MSGBOX
     #define BE_LV_WIDGET_SPINBOX
     #define BE_LV_WIDGET_SPINNER
+
+    #define BE_LV_WIDGET_QRCODE
 
 #endif  // ESP32
 

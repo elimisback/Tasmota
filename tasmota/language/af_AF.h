@@ -243,6 +243,7 @@
 
 // xdrv_02_webserver.ino
 #define D_NOSCRIPT "Skakel JavaScript aan om Tasmota te gebruik"
+#define D_SAFEBOOT "SAFEBOOT"
 #define D_MINIMAL_FIRMWARE_PLEASE_UPGRADE "MINIMAL firmware <br> gradeer asseblief op"
 #define D_WEBSERVER_ACTIVE_ON "Webbediener aktief op"
 #define D_WITH_IP_ADDRESS "met IP-adres"
@@ -372,6 +373,7 @@
 #define D_OTA_URL "OTA Url"
 #define D_START_UPGRADE "Begin opgradering"
 #define D_UPGRADE_BY_FILE_UPLOAD "Gradeer op volgens lêeroplaai"
+#define D_UPLOAD_FACTORY "Switching to safeboot partition"
 #define D_UPLOAD_STARTED "Oplaai begin"
 #define D_UPGRADE_STARTED "Opgradering is begin"
 #define D_UPLOAD_DONE "Oplaai gedoen"
@@ -865,7 +867,8 @@
 #define D_GPIO_SHIFT595_OE     "74x595 OE"
 #define D_GPIO_SHIFT595_SER    "74x595 SER"
 #define D_SENSOR_CM11_TX       "CM110x TX" 
-#define D_SENSOR_CM11_RX       "CM110x RX" 
+#define D_SENSOR_CM11_RX       "CM110x RX"
+#define D_SENSOR_FLOWRATEMETER "Flowrate"
 
 // Units
 #define D_UNIT_AMPERE "A"
@@ -913,6 +916,8 @@
 #define D_UNIT_WATT "W"
 #define D_UNIT_WATTHOUR "Wh"
 #define D_UNIT_WATT_METER_QUADRAT "W/m²"
+#define D_UNIT_LITER_PER_MINUTE "l/min"
+#define D_UNIT_CUBICMETER_PER_HOUR "m³/h"
 
 #define D_NEW_ADDRESS          "Setting address to"
 #define D_OUT_OF_RANGE         "Out of Range"
@@ -1053,6 +1058,9 @@
 #define D_FP_ADDRCODE "Adres kode"           // 0x20 Address code
 #define D_FP_PASSVERIFY "Wagwoord geverifieer"    // 0x21 Verify the fingerprint passed
 #define D_FP_UNKNOWNERROR "Fout"              // Any other error
+
+// xsns_96_flowratemeter.ino
+#define D_FLOWRATEMETER_NAME "Flowmeter"
 
 // xsns_83_neopool.ino
 #define D_NEOPOOL_MACH_NONE               "NeoPool"           // Machine names

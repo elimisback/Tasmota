@@ -28,7 +28,7 @@
  * Use online command StateText to translate ON, OFF, HOLD and TOGGLE.
  * Use online command Prefix to translate cmnd, stat and tele.
  *
- * Updated until v9.4.0.1 - Last update 03.05.2022
+ * Updated until v9.4.0.1 - Last update 30.05.2022
 \*********************************************************************/
 
 #define LANGUAGE_MODULE_NAME         // Enable to display "Module Generic" (ie Spanish), Disable to display "Generic Module" (ie English)
@@ -102,6 +102,7 @@
 #define D_FILE                 "File"
 #define D_FLOW_RATE            "Flusso dati"
 #define D_FRAGMENTATION        "framm."      // Lower case abbreviated version of fragmentation used in "memory fragmentation"
+#define D_FRAME_RATE           "Frequenza fotogrammi"
 #define D_FREE_MEMORY          "Memoria libera"
 #define D_PSR_MAX_MEMORY       "PS-RAM - Memoria"
 #define D_PSR_FREE_MEMORY      "PS-RAM - Memoria libera"
@@ -139,6 +140,7 @@
 #define D_PASSWORD             "Password"
 #define D_PH                   "pH"
 #define D_MQ                   "MQ"
+#define D_PARTITION            "Partizione"      // As in flash and firmware partition
 #define D_PORT                 "Porta"
 #define D_POWER_FACTOR         "Fattore di potenza"
 #define D_POWERUSAGE           "Potenza"
@@ -176,12 +178,13 @@
 #define D_TOGGLE               "ON/OFF"
 #define D_TOPIC                "Topic"
 #define D_TOTAL_USAGE          "Uso totale"
-#define D_TRANSMIT             "Trasmesso"
+#define D_TRANSMIT             "Trasmessi"
 #define D_TRUE                 "Vero"
 #define D_TVOC                 "TVOC"
 #define D_UPGRADE              "aggiornamento"
 #define D_UPLOAD               "Caricamento"
 #define D_UPTIME               "Tempo accensione"
+#define D_USED                 "usati"
 #define D_USER                 "Utente"
 #define D_UTC_TIME             "UTC"
 #define D_UV_INDEX             "Indice UV"
@@ -243,7 +246,7 @@
 
 // xdrv_02_webserver.ino
 #define D_NOSCRIPT                                 "Per usare Tasmota abilita JavaScript"
-#define D_SAFEBOOT                                 "SAFEBOOT"
+#define D_SAFEBOOT                                 "BOOT SICURO"
 #define D_MINIMAL_FIRMWARE_PLEASE_UPGRADE          "Firmware MINIMALE<br>Effettua aggiornamento"
 #define D_WEBSERVER_ACTIVE_ON                      "Server web attivo in"
 #define D_WITH_IP_ADDRESS                          "con indirizzo IP"
@@ -551,7 +554,7 @@
 #define D_COLOR_GREEN  "Verde"
 #define D_COLOR_BLUE   "Blu"
 #define D_CCT          "CCT"
-#define D_PROXIMITY    "Vicinanza"
+#define D_PROXIMITY    "Prossimità"
 
 // xsns_32_mpu6050.ino
 #define D_AX_AXIS "Accelerazione asse X"
@@ -768,6 +771,8 @@
 #define D_SENSOR_DDSU666_RX             "DDSU666 - RX"
 #define D_SENSOR_SM2135_CLK             "SM2135 - CLK"
 #define D_SENSOR_SM2135_DAT             "SM2135 - DATI"
+#define D_SENSOR_BP5758D_CLK            "BP5758D - CLK"
+#define D_SENSOR_BP5758D_DAT            "BP5758D - DATI"
 #define D_SENSOR_DEEPSLEEP              "Sleep profondo"
 #define D_SENSOR_EXS_ENABLE             "EXS - Abilita"
 #define D_SENSOR_CLIENT_TX              "Client - TX"
@@ -799,8 +804,8 @@
 #define D_SENSOR_ADC_RANGE              "ADC - Intervallo"
 #define D_SENSOR_ADC_CT_POWER           "ADC - CTR alimentazione"
 #define D_SENSOR_ADC_JOYSTICK           "ADC - Joystick"
-#define D_SENSOR_ADC_PH                 "ADC pH"
-#define D_SENSOR_ADC_MQ                 "ADC MQ"
+#define D_SENSOR_ADC_PH                 "ADC - pH"
+#define D_SENSOR_ADC_MQ                 "ADC - MQ"
 #define D_GPIO_WEBCAM_PWDN              "Webcam - PWDN"
 #define D_GPIO_WEBCAM_RESET             "Webcam - RESET"
 #define D_GPIO_WEBCAM_XCLK              "Webcam - XCLK"
@@ -876,6 +881,7 @@
 #define D_UNIT_CENTIMETER                 "cm"
 #define D_UNIT_DEGREE                     "°"
 #define D_UNIT_FAHRENHEIT                 "F"
+#define D_UNIT_FPS                        "FPS"
 #define D_UNIT_HERTZ                      "Hz"
 #define D_UNIT_HOUR                       "o"
 #define D_UNIT_GALLONS                    "gal"

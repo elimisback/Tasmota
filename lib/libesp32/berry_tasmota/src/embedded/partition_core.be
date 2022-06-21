@@ -109,6 +109,7 @@ class Partition_info
     if self.is_ota() == nil && !self.is_factory()   return -1 end
     try
       var addr = self.start
+      var size = self.size
       var magic_byte = flash.read(addr, 1).get(0, 1)
       if magic_byte != 0xE9 return -1 end
       
@@ -126,6 +127,7 @@ class Partition_info
         # print(string.format("Segment %i: flash_offset=0x%08X start_addr=0x%08X size=0x%08X", seg_num, seg_offset, seg_start_addr, seg_size))
 
         seg_offset += seg_size + 8    # add segment_length + sizeof(esp_image_segment_header_t)
+        if seg_offset >= (addr + size)   return -1 end
 
         seg_num += 1
       end
@@ -140,30 +142,43 @@ class Partition_info
     end
   end
 
+  def type_to_string()
+    if   self.type == 0 return "app"
+    elif self.type == 1  return "data"
+    end
+    import string
+    return string.format("0x%02X", self.type)
+  end
+
+  def subtype_to_string()
+    if   self.type == 0
+      if   self.subtype == 0      return "factory"
+      elif self.subtype >= 0x10 && self.subtype < 0x20 return "ota_" + str(self.subtype - 0x10)
+      elif self.subtype == 0x20  return "test"
+      end
+    elif self.type == 1
+      if   self.subtype == 0x00  return "otadata"
+      elif self.subtype == 0x01  return "phy"
+      elif self.subtype == 0x02  return "nvs"
+      elif self.subtype == 0x03  return "coredump"
+      elif self.subtype == 0x04  return "nvskeys"
+      elif self.subtype == 0x05  return "efuse_em"
+      elif self.subtype == 0x80  return "esphttpd"
+      elif self.subtype == 0x81  return "fat"
+      elif self.subtype == 0x82  return "spiffs"
+      end
+    end
+    import string
+    return string.format("0x%02X", self.subtype)
+  end
+
   # Human readable version of Partition information
   # this method is not included in the solidified version to save space,
   # it is included only in the optional application `tapp` version
   def tostring()
     import string
-    var type_s = ""
-    var subtype_s = ""
-    if   self.type == 0  type_s = "app"
-      if   self.subtype == 0  subtype_s = "factory"
-      elif self.subtype >= 0x10 && self.subtype < 0x20 subtype_s = "ota" + str(self.subtype - 0x10)
-      elif self.subtype == 0x20  subtype_s = "test"
-      end
-    elif self.type == 1  type_s = "data"
-      if   self.subtype == 0x00  subtype_s = "otadata"
-      elif self.subtype == 0x01  subtype_s = "phy"
-      elif self.subtype == 0x02  subtype_s = "nvs"
-      elif self.subtype == 0x03  subtype_s = "coredump"
-      elif self.subtype == 0x04  subtype_s = "nvskeys"
-      elif self.subtype == 0x05  subtype_s = "efuse_em"
-      elif self.subtype == 0x80  subtype_s = "esphttpd"
-      elif self.subtype == 0x81  subtype_s = "fat"
-      elif self.subtype == 0x82  subtype_s = "spiffs"
-      end
-    end
+    var type_s = self.type_to_string()
+    var subtype_s = self.subtype_to_string()
 
     # reformat strings
     if type_s != ""    type_s = " (" + type_s + ")" end
@@ -223,11 +238,12 @@ partition_core.Partition_info = Partition_info
       seq will add (x + n*1 + 1 - seq)%n
  -------------------------------------------------------------#
 class Partition_otadata
-  var maxota          #- number of highest OTA partition, default 1 (double ota0/ota1) -#
-  var offset          #- offset of the otadata partition (0x2000 in length), default 0xE000 -#
-  var active_otadata  #- which otadata block is active, 0 or 1, i.e. 0xE000 or 0xF000 -#
-  var seq0            #- ota_seq of first block -#
-  var seq1            #- ota_seq of second block -#
+  var maxota          # number of highest OTA partition, default 1 (double ota0/ota1)
+  var has_factory     # is there a factory partition
+  var offset          # offset of the otadata partition (0x2000 in length), default 0xE000
+  var active_otadata  # which otadata block is active, 0 or 1, i.e. 0xE000 or 0xF000 -- or -1 if no OTA active, i.e. boot on factory
+  var seq0            # ota_seq of first block
+  var seq1            # ota_seq of second block
 
   #- crc32 for ota_seq as 32 bits unsigned, with init vector -1 -#
   static def crc32_ota_seq(seq)
@@ -238,12 +254,13 @@ class Partition_otadata
   #---------------------------------------------------------------------#
   # Rest of the class
   #---------------------------------------------------------------------#
-  def init(maxota, offset)
+  def init(maxota, has_factory, offset)
     self.maxota = maxota
+    self.has_factory = has_factory
     if self.maxota == nil  self.maxota = 1 end
     self.offset = offset
     if self.offset == nil  self.offset = 0xE000 end
-    self.active_otadata = 0
+    self.active_otadata = -1
     self.load()
   end
 
@@ -300,7 +317,7 @@ class Partition_otadata
 
   #- internally used, validate data -#
   def _validate()
-    self.active_otadata = 0        #- if none is valid, default to OTA0 -#
+    self.active_otadata = self.has_factory ? -1 : 0        # if no valid otadata, then use factory (-1) if any, or ota_0
     if self.seq0 != nil
       self.active_otadata = (self.seq0 - 1) % (self.maxota + 1)
     end
@@ -344,8 +361,9 @@ class Partition_otadata
   # Produce a human-readable representation of the object with relevant information
   def tostring()
     import string
-    return string.format("<instance: Partition_otadata(ota_active:%d, ota_seq=[%d,%d], ota_max=%d)>",
-                          self.active_otadata, self.seq0, self.seq1, self.maxota)
+    return string.format("<instance: Partition_otadata(ota_active:%s, ota_seq=[%d,%d], ota_max=%d)>",
+                          self.active_otadata >= 0 ? "ota_" + str(self.active_otadata) : "factory",
+                          self.seq0, self.seq1, self.maxota)
   end
 end
 partition_core.Partition_otadata = Partition_otadata
@@ -396,16 +414,31 @@ class Partition
     return nil
   end
 
+  def get_factory_slot()
+    for slot: self.slots
+      if slot.is_factory() return slot end
+    end
+  end
+
+  def has_factory()
+    return self.get_factory_slot() != nil
+  end
+
   #- compute the highest ota<x> partition -#
   def ota_max()
-    var ota_max = 0
+    var ota_max = nil
     for slot:self.slots
       if slot.type == 0 && (slot.subtype >= 0x10 && slot.subtype < 0x20)
         var ota_num = slot.subtype - 0x10
-        if ota_num > ota_max  ota_max = ota_num end
+        if (ota_max == nil) || (ota_num > ota_max)   ota_max = ota_num end
       end
     end
     return ota_max
+  end
+
+  # get the active OTA app partition number
+  def get_active()
+    return self.otadata.active_otadata
   end
 
   def load_otadata()
@@ -418,12 +451,7 @@ class Partition
       end
     end
 
-    self.otadata = partition_core.Partition_otadata(ota_max, otadata_offset)
-  end
-
-  # get the active OTA app partition number
-  def get_active()
-    return self.otadata.active_otadata
+    self.otadata = partition_core.Partition_otadata(ota_max, self.has_factory(), otadata_offset)
   end
 
   #- change the active partition -#
@@ -491,9 +519,9 @@ class Partition
   end
 
   # switch to safeboot `factory` partition
-  def switch_factory()
+  def switch_factory(force_ota)
     import flash
-    flash.rollback()
+    flash.factory(force_ota)
   end
 end
 partition_core.Partition = Partition

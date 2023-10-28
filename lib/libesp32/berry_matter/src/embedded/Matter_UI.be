@@ -34,6 +34,8 @@ import matter
 class Matter_UI
   static var _CLASSES_TYPES = "|relay|light0|light1|light2|light3|shutter|shutter+tilt"
                               "|temperature|pressure|illuminance|humidity|occupancy|onoff|contact"
+                              "|-virtual|v_relay|v_light0|v_light1|v_light2|v_light3"
+                              "|v_temp|v_pressure|v_illuminance|v_humidity|v_contact"
   # static var _CLASSES_HTTP  = "-http"
   static var _CLASSES_TYPES2= "|http_relay|http_light0|http_light1|http_light2|http_light3"
                               "|http_temperature|http_pressure|http_illuminance|http_humidity"
@@ -105,6 +107,8 @@ class Matter_UI
       var commissioning_open_checked = self.device.commissioning_open != nil ? "checked" : ""
       webserver.content_send(f"<p><input id='comm' type='checkbox' name='comm' {commissioning_open_checked}>")
       webserver.content_send("<label for='comm'><b>Commissioning open</b></label></p>")
+      var disable_bridge_mode_checked = self.device.disable_bridge_mode ? " checked" : ""
+      webserver.content_send(f"<p><input type='checkbox' name='nobridge'{disable_bridge_mode_checked}><b>Force Static endpoints</b> (non-bridge)</p>")  
     end
 
     webserver.content_send("<p></p><button name='save' class='button bgrn'>Save</button></form></p>"
@@ -494,8 +498,8 @@ class Matter_UI
       var typ = class_types[i]
       if typ == ''
         webserver.content_send("<option value=''></option>")
-      elif typ == '-http'
-        webserver.content_send("<option value='' disabled>--- Tasmota Remote ---</option>")
+      elif typ == '-virtual'
+        webserver.content_send("<option value='' disabled>--- Virtual Devices ---</option>")
       else
         var nam = self.device.get_plugin_class_displayname(typ)
         webserver.content_send(format("<option value='%s'%s>%s</option>", typ, (typ == cur) ? " selected" : "", nam))
@@ -739,9 +743,9 @@ class Matter_UI
     try
 
       # debug information about parameters
-      for i:0..webserver.arg_size()-1
-        tasmota.log(format("MTR: Arg%i '%s' = '%s'", i, webserver.arg_name(i), webserver.arg(i)))
-      end
+      # for i:0..webserver.arg_size()-1
+      #   tasmota.log(format("MTR: Arg%i '%s' = '%s'", i, webserver.arg_name(i), webserver.arg(i)))
+      # end
 
       #---------------------------------------------------------------------#
       # Change Passcode and/or Passcode
@@ -763,6 +767,11 @@ class Matter_UI
       elif webserver.has_arg("save")
         var matter_enabled_requested = webserver.has_arg("menable")
         var matter_commissioning_requested = webserver.has_arg("comm")
+        var matter_disable_bridge_mode_requested = (webserver.arg("nobridge") == 'on')
+        if self.device.disable_bridge_mode != matter_disable_bridge_mode_requested
+          self.device.disable_bridge_mode = matter_disable_bridge_mode_requested
+          self.device.save_param()
+        end
 
         if matter_enabled_requested != self.matter_enabled()
           if matter_enabled_requested

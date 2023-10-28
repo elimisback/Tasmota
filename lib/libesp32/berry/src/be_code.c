@@ -79,19 +79,10 @@ static int codeABx(bfuncinfo *finfo, bopcode op, int a, int bx)
 }
 
 /* Move value from register b to register a */
-static void code_move_nooptim(bfuncinfo *finfo, int a, int b)
-{
-    if (isK(b)) {
-        codeABx(finfo, OP_LDCONST, a, b & 0xFF);
-    } else {
-        codeABC(finfo, OP_MOVE, a, b, 0);
-    }
-}
-
-/* Move value from register b to register a */
 /* Check the previous instruction to compact both instruction as one if possible */
 /* If b is a constant, add LDCONST or add MOVE otherwise */
-static void code_move(bfuncinfo *finfo, int a, int b)
+/* returns false if the move operation happened, or true if there was a register optimization and `b` should be replaced by `a` */
+static bbool code_move(bfuncinfo *finfo, int a, int b)
 {
     if (finfo->pc) {  /* If not the first instruction of the function */
         binstruction *i = be_vector_end(&finfo->code);  /* get the last instruction */
@@ -101,11 +92,23 @@ static void code_move(bfuncinfo *finfo, int a, int b)
             int x = IGET_RA(*i), y = IGET_RKB(*i), z = IGET_RKC(*i);
             if (b == x && (a == y || (op < OP_NEG && a == z))) {
                 *i = (*i & ~IRA_MASK) | ISET_RA(a);
-                return;
+                return btrue;
+            }
+        }
+        if (!isK(b)) {  /* OP_MOVE */
+            /* check if the previous OP_MOVE is not identical */
+            binstruction mov = ISET_OP(OP_MOVE) | ISET_RA(a) | ISET_RKB(b) | ISET_RKC(0);
+            if (mov == *i) {
+                return btrue;   /* previous instruction is the same move, remove duplicate */
             }
         }
     }
-    code_move_nooptim(finfo, a, b);
+    if (isK(b)) {
+        codeABx(finfo, OP_LDCONST, a, b & 0xFF);
+    } else {
+        codeABC(finfo, OP_MOVE, a, b, 0);
+    }
+    return bfalse;
 }
 
 /* Free register at top (checks that it´s a register) */
@@ -113,7 +116,7 @@ static void code_move(bfuncinfo *finfo, int a, int b)
 static void free_expreg(bfuncinfo *finfo, bexpdesc *e)
 {
     /* release temporary register */
-    if (e && e->type == ETREG) {
+    if (e && e->type == ETREG && e->v.idx == finfo->freereg - 1) {      /* free ETREG only if it's top of stack */
         be_code_freeregs(finfo, 1);
     }
 }
@@ -355,7 +358,7 @@ static int suffix_destreg(bfuncinfo *finfo, bexpdesc *e1, int dst, bbool no_reg_
         /* both are ETREG, we keep the lowest and discard the other */
         if (reg1 != reg2) {
             cand_dst = min(reg1, reg2);
-            be_code_freeregs(finfo, 1);  /* and free the other one */
+            be_code_freeregs(finfo, finfo->freereg - cand_dst);  /* and free the other one */
         } else {
             cand_dst = reg1;  /* both ETREG are equal, we return its value */
         }
@@ -469,7 +472,18 @@ static int exp2reg(bfuncinfo *finfo, bexpdesc *e, int dst)
         int pcf = NO_JUMP;  /* position of an eventual LOAD false */
         int pct = NO_JUMP;  /* position of an eventual LOAD true */
         int jpt = appendjump(finfo, jumpboolop(e, 1), e);
-        reg = e->v.idx;
+        /* below is a simplified version of `codedestreg` for a single bexpdesc */
+        if (e->type == ETREG) {
+            /* if e is already ETREG from local calculation, we reuse the register */
+            reg = e->v.idx;
+        } else {
+            /* otherwise, we allocate a new register or use the target provided */
+            if (dst < 0) {
+                reg = be_code_allocregs(finfo, 1);
+            } else {
+                reg = dst;
+            }
+        }
         be_code_conjump(finfo, &e->t, jpt);
         pcf = code_bool(finfo, reg, 0, 1);
         pct = code_bool(finfo, reg, 1, 0);
@@ -690,10 +704,10 @@ int be_code_setvar(bfuncinfo *finfo, bexpdesc *e1, bexpdesc *e2, bbool keep_reg)
     switch (e1->type) {
     case ETLOCAL: /* It can't be ETREG. */
         if (e1->v.idx != src) {
-            if (keep_reg) {
-                code_move_nooptim(finfo, e1->v.idx, src); /* always do explicit move */
-            } else {
-                code_move(finfo, e1->v.idx, src); /* do explicit move only if needed */
+            bbool reg_optimized = code_move(finfo, e1->v.idx, src); /* do explicit move only if needed */
+            if (reg_optimized) {
+                free_expreg(finfo, e2); /* free source (checks only ETREG) */
+                *e2 = *e1;      /* now e2 is e1 ETLOCAL */
             }
         }
         break;
@@ -723,9 +737,9 @@ int be_code_setvar(bfuncinfo *finfo, bexpdesc *e1, bexpdesc *e2, bbool keep_reg)
 /* if local or const, allocate a new register and copy value */
 int be_code_nextreg(bfuncinfo *finfo, bexpdesc *e)
 {
-    int dst = finfo->freereg;
     int src = exp2anyreg(finfo, e); /* get variable register index */
-    if (e->type != ETREG) { /* move local and const to new register */
+    int dst = finfo->freereg;
+    if ((e->type != ETREG) || (src < dst - 1)) { /* move local and const to new register, don't move if already top of stack */
         code_move(finfo, dst, src);
         be_code_allocregs(finfo, 1);
     } else {
@@ -829,8 +843,8 @@ void be_code_ret(bfuncinfo *finfo, bexpdesc *e)
 /* Both expdesc are materialized in kregs */
 static void package_suffix(bfuncinfo *finfo, bexpdesc *c, bexpdesc *k)
 {
-    int key = exp2anyreg(finfo, k);
     c->v.ss.obj = exp2anyreg(finfo, c);
+    int key = exp2anyreg(finfo, k);
     c->v.ss.tt = c->type;
     c->v.ss.idx = key;
 }
